@@ -14,3 +14,5 @@
   .set-table input,.exercise-footer input,.exercise-note,.workout-note textarea{font-size:1rem;font-size:max(16px,1rem);scroll-margin-block:16px}
   :root[data-keyboard="open"] .mobile-nav{visibility:hidden;pointer-events:none}
 }
+
+.history-entry{background:var(--surface);border:1px solid var(--border);border-radius:15px}.history-entry .history-card{border:0;background:transparent}.history-actions{padding:0 22px 18px;display:flex;justify-content:flex-end}

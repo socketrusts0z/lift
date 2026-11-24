@@ -47,3 +47,5 @@ const rows=[['workout_id','workout','started_at','ended_at','exercise','set','ty
 for(const w of data.workouts)for(const e of w.exercises)e.sets.forEach((s,i)=>{if(s.done)rows.push([w.id,safeText(w.name),w.startedAt,w.endedAt,safeText(e.name),i+1,s.type,displayWeight(s.weight,unit),s.reps,s.seconds,s.distance,safeText([w.notes,e.notes].filter(Boolean).join(' / '))]);});
 return '\uFEFF'+rows.map(r=>r.map(quote).join(',')).join('\r\n');
 }
+
+export function removeWorkout(data,id){return {...data,workouts:data.workouts.filter(w=>w.id!==id)};}

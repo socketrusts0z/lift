@@ -30,3 +30,14 @@ test('previous session weights follow the current unit without changing history'
  d.settings.unit='kg';assert.equal(displayWeight(w.exercises[0].sets[0].weight,d.settings.unit),60);
  assert.deepEqual(d.workouts,before);
 });
+
+test('deleting history removes its contribution to counts, volume and records on reload',async()=>{
+ const {removeWorkout}=await import('../model.mjs');const d=completed();
+ const second=clone(d.workouts[0]);second.id='second-workout';second.exercises[0].sets[0].weight=80;d.workouts.push(second);d.active=startWorkout(d.routines[1]);
+ const remaining=removeWorkout(d,second.id),reopened=validateData(JSON.parse(JSON.stringify(remaining)));
+ assert.equal(reopened.workouts.length,1);
+ assert.equal(reopened.workouts.reduce((sum,w)=>sum+workoutStats(w).volume,0),480);
+ assert.equal(Math.max(...reopened.workouts.flatMap(w=>w.exercises.flatMap(e=>e.sets.filter(s=>s.done&&s.type==='working').map(s=>s.weight)))),60);
+ assert.equal(reopened.active.id,d.active.id);assert.equal(d.workouts.length,2);
+ assert.equal(removeWorkout(reopened,reopened.workouts[0].id).workouts.length,0);
+});
