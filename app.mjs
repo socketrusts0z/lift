@@ -106,6 +106,32 @@ if(el.dataset.exerciseField&&data.active){const ex=findExercise(el);const key=el
 }catch(err){toast(err.message);}}
 async function updateChange(e){const el=e.target;try{if(el.dataset.setting){if(el.dataset.setting==='rest'&&(el.value===''||!el.validity.valid)){toast('Use 0–3600 seconds.');return;}updateSettingControl(el);return;}if(el.id==='progress-exercise'){selectedExercise=el.value;render();}if(el.id==='import-file'){const file=el.files?.[0];if(!file)return;if(file.size>50*1024*1024)throw new Error('Choose a backup smaller than 50 MB.');pendingImport=validateData(JSON.parse(await file.text()));$('#import-preview').innerHTML=`<div class="privacy-note"><strong>Ready to import</strong><p>${pendingImport.workouts.length} workouts · ${pendingImport.routines.length} routines · ${pendingImport.customExercises.length} custom exercises${pendingImport.active?' · 1 unfinished session':''}</p></div><p class="small muted" style="margin-top:12px">Merge adds missing records and keeps existing records with the same ID. It keeps your settings and current unfinished workout.</p><div class="dialog-actions"><button class="secondary" data-action="import-replace">Replace all data…</button><button class="primary" data-action="import-merge">Merge into device</button></div>`;}}
 catch(err){pendingImport=null;if($('#import-preview'))$('#import-preview').textContent='Import rejected: '+err.message;else toast(err.message);}}
+// iOS keeps the layout viewport tall while its keyboard shrinks the visual viewport.
+// Leave native focus scrolling alone unless the field is actually obscured.
+let keyboardBaseline=window.visualViewport?.height||window.innerHeight,keyboardScrollTimer;
+function updateKeyboardLayout(){
+ const viewport=window.visualViewport;
+ const field=document.activeElement;
+ const editable=field instanceof HTMLElement&&field.matches('input:not([type=file]):not([type=checkbox]):not([type=radio]),textarea');
+ const height=viewport?.height||window.innerHeight;
+ const scale=viewport?.scale||1;
+ if(!editable&&scale===1)keyboardBaseline=Math.max(keyboardBaseline,height);
+ const open=editable&&scale===1&&Math.max(keyboardBaseline,window.innerHeight)-height>120;
+ document.documentElement.dataset.keyboard=open?'open':'closed';
+ clearTimeout(keyboardScrollTimer);
+ if(!open||!window.matchMedia('(max-width:760px)').matches)return;
+ keyboardScrollTimer=setTimeout(()=>{
+  if(document.activeElement!==field)return;
+  const bounds=field.getBoundingClientRect();
+  const top=(viewport?.offsetTop||0)+16,bottom=(viewport?.offsetTop||0)+height-16;
+  const delta=bounds.bottom>bottom?bounds.bottom-bottom:bounds.top<top?bounds.top-top:0;
+  if(Math.abs(delta)>1)window.scrollBy({top:delta,behavior:'auto'});
+ },150);
+}
+window.visualViewport?.addEventListener('resize',updateKeyboardLayout);
+document.addEventListener('focusin',updateKeyboardLayout);
+document.addEventListener('focusout',()=>setTimeout(updateKeyboardLayout,0));
+window.addEventListener('orientationchange',()=>{keyboardBaseline=0;setTimeout(updateKeyboardLayout,250);});
 $('#modal-close').onclick=()=>modal.close();document.addEventListener('click',handleClick);document.addEventListener('input',updateInput);document.addEventListener('change',updateChange);window.addEventListener('hashchange',()=>{if(data){captureSettings();render();window.scrollTo(0,0);}});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')updateTimers();});window.addEventListener('beforeunload',e=>{if(saveFailed||$('#save-status').textContent==='Saving on device…'){e.preventDefault();e.returnValue='';}});
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;if(data&&view==='settings')render();});
 window.addEventListener('online',()=>$('#connection').textContent='On-device storage');window.addEventListener('offline',()=>$('#connection').textContent='Offline · Ready to train');
