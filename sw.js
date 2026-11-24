@@ -1,5 +1,5 @@
-const CACHE='lift-shell-v15';
-const ASSETS=['./','./index.html','./style.css?v=13','./app.mjs?v=15','./model.mjs?v=14','./keyboard.mjs?v=9','./storage.mjs','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
-self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS))));
+const CACHE='lift-shell-v16';
+const ASSETS=['./','./index.html','./style.css?v=16','./app.mjs?v=16','./model.mjs?v=16','./keyboard.mjs?v=9','./storage.mjs','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
+self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS.map(path=>new Request(path,{cache:'reload'}))))));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('lift-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',event=>{if(event.request.method!=='GET'||new URL(event.request.url).origin!==self.location.origin)return;if(event.request.mode==='navigate'){event.respondWith(fetch(event.request).catch(()=>caches.match('./index.html')));return;}event.respondWith(caches.match(event.request).then(cached=>cached||fetch(event.request)));});
+self.addEventListener('fetch',event=>{if(event.request.method!=='GET'||new URL(event.request.url).origin!==self.location.origin)return;if(event.request.mode==='navigate'){event.respondWith(fetch(event.request,{cache:'no-cache'}).catch(()=>caches.match('./index.html')));return;}event.respondWith(caches.match(event.request).then(cached=>cached||fetch(event.request)));});

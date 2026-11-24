@@ -18,7 +18,23 @@ return {schema:1,settings:{unit:'kg',theme:'system',rest:90},customExercises:[],
 }
 export function startWorkout(routine,history=[]) {
 const w={id:uid(),name:routine?.name||'Freestyle workout',notes:routine?.notes||'',startedAt:new Date().toISOString(),endedAt:null,restEnd:null,exercises:clone(routine?.exercises||[])};
-for(const e of w.exercises){e.id=uid(); const last=[...history].sort((a,b)=>Date.parse(b.startedAt)-Date.parse(a.startedAt)).flatMap(x=>x.exercises).find(x=>x.exerciseId===e.exerciseId);const prior=last?.sets.filter(s=>s.done&&s.type!=='warmup')||[];e.sets=e.sets.map((s,i)=>newSet({...s,id:uid(),...(prior[i]?{weight:prior[i].weight,reps:prior[i].reps,seconds:prior[i].seconds,distance:prior[i].distance}:{}),done:false}));}
+for(const exercise of w.exercises){
+  exercise.id=uid();
+  const last=[...history].sort((a,b)=>Date.parse(b.startedAt)-Date.parse(a.startedAt))
+    .flatMap(workout=>workout.exercises).find(item=>item.exerciseId===exercise.exerciseId);
+  const prior=last?.sets.filter(set=>set.done&&set.type!=='warmup')||[];
+  exercise.sets=exercise.sets.map((set,index)=>{
+    const previous=prior[index];
+    const recalledWeight=previous?previous.weight:set.weight;
+    const weight=usesAddedWeight(exercise)?set.weight??recalledWeight:recalledWeight;
+    return newSet({
+      ...set,id:uid(),weight:weight??null,done:false,
+      reps:previous?previous.reps:set.reps,
+      seconds:previous?previous.seconds:set.seconds,
+      distance:previous?previous.distance:set.distance
+    });
+  });
+}
 return w;
 }
 export function validSet(set,mode) {
@@ -26,7 +42,10 @@ const positive=k=>Number.isFinite(set[k])&&set[k]>0; const reps=()=>positive('re
 return mode==='weight' ? Number.isFinite(set.weight)&&set.weight>=0&&reps() : mode==='bodyweight'?reps():mode==='duration'?positive('seconds'):positive('seconds')&&positive('distance');
 }
 export function usesAddedWeight(exercise){
-  return exercise.mode==='bodyweight'&&(exercise.exerciseId??exercise.id)==='pullup';
+  if(exercise.mode!=='bodyweight')return false;
+  if((exercise.exerciseId??exercise.id)==='pullup')return true;
+  const name=exercise.name.toLowerCase().replace(/[^a-z]/g,'');
+  return /^(?:(?:weighted|bodyweight)?pullups?|pullups?weighted)$/.test(name);
 }
 export function workoutStats(workout){
   let sets=0,volume=0;

@@ -66,3 +66,30 @@ test('pull-ups keep reps-only history and track only the extra load for weighted
  assert.equal(next.exercises[0].sets[2].weight,10);
  assert.equal(next.exercises[0].sets[2].done,false);
 });
+
+test('saved pull-up name variants expose added weight without changing the exercise ID',()=>{
+ const data=completed();
+ const previous=data.workouts[0].exercises[0];
+ Object.assign(previous,{exerciseId:'custom-pull',name:'Pullups',mode:'bodyweight'});
+ previous.sets=[newSet({weight:5,reps:6,done:true})];
+ const loaded=validateData(JSON.parse(JSON.stringify(data))).workouts[0];
+ for(const name of ['Pullup','Pull-ups','Pull Ups','Weighted Pull-up','Pullups (weighted)']){
+  assert(usesAddedWeight({...loaded.exercises[0],name}),name);
+ }
+ assert(!usesAddedWeight({...loaded.exercises[0],name:'Band-assisted pull-up'}));
+ assert(!usesAddedWeight({...loaded.exercises[0],name:'Dip'}));
+ assert.equal(loaded.exercises[0].exerciseId,'custom-pull');
+ assert.equal(workoutStats(loaded).volume,30);
+});
+
+test('an explicit pull-up routine load, including zero, takes priority over previous weight',()=>{
+ const data=completed();
+ const pullup=newExercise(LIBRARY.find(exercise=>exercise.id==='pullup'));
+ const history=clone(pullup);
+ history.sets=history.sets.map(set=>({...set,weight:10,reps:5,done:true}));
+ data.workouts[0].exercises=[history];
+ pullup.sets[0].weight=5;
+ pullup.sets[1].weight=0;
+ const exercise=startWorkout({exercises:[pullup]},data.workouts).exercises[0];
+ assert.deepEqual(exercise.sets.map(set=>set.weight),[5,0,10]);
+});
