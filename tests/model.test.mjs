@@ -13,3 +13,20 @@ test('malformed and duplicate IDs and impossible completed sets are rejected',()
 test('CSV quotes commas, line breaks, and spreadsheet formula prefixes',()=>{const d=completed();d.workouts[0].name='=SUM(1,2)';d.workouts[0].notes='Line 1\n"Line 2"';const csv=toCSV(d);assert.ok(csv.includes('"\'=SUM(1,2)"'));assert.ok(csv.includes('"Line 1\n""Line 2"""'));assert.equal(csv.match(/"weight_kg"/g).length,1);});
 test('unit conversions round trip without changing canonical kilograms',()=>{const kg=60;const lb=displayWeight(kg,'lb');assert.ok(Math.abs(toKg(lb,'lb')-kg)<.005);assert.equal(toKg('','kg'),null);});
 test('backup cannot finish before it starts or duplicate its active session',()=>{const d=completed();d.workouts[0].endedAt='2000-01-01T00:00:00Z';assert.throws(()=>validateData(d));const b=completed();b.active=clone(b.workouts[0]);b.active.endedAt=null;assert.throws(()=>validateData(b),/Active workout/);});
+
+test('pounds preference and active weights survive saving and reopening',()=>{
+ const d=initialData();d.settings.unit='lb';d.active=startWorkout(d.routines[0]);
+ d.active.exercises[0].sets[0].weight=toKg(100,d.settings.unit);
+ const reopened=validateData(JSON.parse(JSON.stringify(d)));
+ assert.equal(reopened.settings.unit,'lb');
+ assert.equal(displayWeight(reopened.active.exercises[0].sets[0].weight,reopened.settings.unit),100);
+ reopened.settings.unit='kg';
+ assert.equal(displayWeight(reopened.active.exercises[0].sets[0].weight,reopened.settings.unit),45.36);
+});
+test('previous session weights follow the current unit without changing history',()=>{
+ const d=completed();d.settings.unit='lb';const before=clone(d.workouts);
+ const w=startWorkout(d.routines[0],d.workouts);
+ assert.equal(displayWeight(w.exercises[0].sets[0].weight,d.settings.unit),132.28);
+ d.settings.unit='kg';assert.equal(displayWeight(w.exercises[0].sets[0].weight,d.settings.unit),60);
+ assert.deepEqual(d.workouts,before);
+});
