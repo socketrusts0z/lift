@@ -25,7 +25,22 @@ export function validSet(set,mode) {
 const positive=k=>Number.isFinite(set[k])&&set[k]>0; const reps=()=>positive('reps')&&Number.isInteger(set.reps);
 return mode==='weight' ? Number.isFinite(set.weight)&&set.weight>=0&&reps() : mode==='bodyweight'?reps():mode==='duration'?positive('seconds'):positive('seconds')&&positive('distance');
 }
-export function workoutStats(w) {let sets=0,volume=0;for(const e of w.exercises)for(const s of e.sets)if(s.done){sets++;if(e.mode==='weight'&&s.type!=='warmup')volume+=(s.weight||0)*(s.reps||0);}return {sets,volume,minutes:Math.max(0,Math.round((Date.parse(w.endedAt||new Date())-Date.parse(w.startedAt))/60000))};}
+export function usesAddedWeight(exercise){
+  return exercise.mode==='bodyweight'&&(exercise.exerciseId??exercise.id)==='pullup';
+}
+export function workoutStats(workout){
+  let sets=0,volume=0;
+  for(const exercise of workout.exercises){
+    const tracksWeight=exercise.mode==='weight'||usesAddedWeight(exercise);
+    for(const set of exercise.sets){
+      if(!set.done)continue;
+      sets++;
+      if(tracksWeight&&set.type!=='warmup')volume+=(set.weight??0)*(set.reps??0);
+    }
+  }
+  const elapsed=Date.parse(workout.endedAt||new Date())-Date.parse(workout.startedAt);
+  return {sets,volume,minutes:Math.max(0,Math.round(elapsed/60000))};
+}
 function assert(ok,message){if(!ok)throw new Error(message);}
 function text(v,max=200){assert(typeof v==='string'&&v.length<=max,'Invalid or overly long text.');return v;}
 function numeric(v,max=1e7){assert(v===null||(typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=max),'Invalid numeric value.');return v;}

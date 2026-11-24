@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {initialData,startWorkout,newSet,validSet,validateData,mergeData,toCSV,toKg,displayWeight,workoutStats,clone} from '../model.mjs';
+import {initialData,startWorkout,newSet,validSet,validateData,mergeData,toCSV,toKg,displayWeight,workoutStats,clone,LIBRARY,newExercise,usesAddedWeight} from '../model.mjs';
 function completed(){const d=initialData();const w=startWorkout(d.routines[0]);w.exercises=w.exercises.slice(0,1);w.exercises[0].sets=[newSet({weight:60,reps:8,done:true}),newSet({weight:20,reps:10,done:true,type:'warmup'})];w.endedAt=new Date(Date.parse(w.startedAt)+60*60000).toISOString();d.workouts=[w];return d;}
 test('backup round trip preserves routines, history, custom exercises and unfinished workout',()=>{const d=completed();d.customExercises.push({id:'custom-1',name:'Custom press',mode:'weight',muscle:'Chest'});d.active=startWorkout(d.routines[1]);d.active.restEnd=Date.now()+90000;assert.deepEqual(validateData(JSON.parse(JSON.stringify(d))),d);});
 test('starting from a routine does not mutate it and recalls previous working sets',()=>{const d=completed(),before=clone(d.routines[0]);const w=startWorkout(d.routines[0],d.workouts);assert.equal(w.exercises[0].sets[0].weight,60);assert.equal(w.exercises[0].sets[0].done,false);assert.deepEqual(d.routines[0],before);assert.notEqual(w.exercises[0].id,d.routines[0].exercises[0].id);});
@@ -40,4 +40,29 @@ test('deleting history removes its contribution to counts, volume and records on
  assert.equal(Math.max(...reopened.workouts.flatMap(w=>w.exercises.flatMap(e=>e.sets.filter(s=>s.done&&s.type==='working').map(s=>s.weight)))),60);
  assert.equal(reopened.active.id,d.active.id);assert.equal(d.workouts.length,2);
  assert.equal(removeWorkout(reopened,reopened.workouts[0].id).workouts.length,0);
+});
+
+test('pull-ups keep reps-only history and track only the extra load for weighted sets',()=>{
+ const data=completed();
+ const pullup=newExercise(LIBRARY.find(exercise=>exercise.id==='pullup'));
+ pullup.sets=[
+  newSet({reps:8,done:true}),
+  newSet({weight:0,reps:6,done:true}),
+  newSet({weight:10,reps:5,done:true}),
+  newSet({weight:5,reps:3,type:'warmup',done:true}),
+  newSet({weight:15,reps:5}),
+ ];
+ data.workouts[0].exercises=[pullup];
+ const loaded=validateData(JSON.parse(JSON.stringify(data)));
+ const workout=loaded.workouts[0];
+ assert(usesAddedWeight(workout.exercises[0]));
+ assert.equal(workout.exercises[0].sets[0].weight,null);
+ assert.equal(workoutStats(workout).sets,4);
+ assert.equal(workoutStats(workout).volume,50);
+ assert.match(toCSV(loaded),/"Pull-up","3","working","10","5"/);
+
+ const next=startWorkout({name:'Pull',exercises:[pullup]},loaded.workouts);
+ assert.equal(next.exercises[0].sets[0].weight,null);
+ assert.equal(next.exercises[0].sets[2].weight,10);
+ assert.equal(next.exercises[0].sets[2].done,false);
 });
