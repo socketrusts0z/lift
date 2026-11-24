@@ -35,7 +35,10 @@ export function installKeyboardHandling(win,doc){
    // Wait for Safari's closing animation and its own final focus scroll.
    clearTimeout(restoreTimer);
    restoreTimer=setTimeout(()=>{
-    if(!session.origin&&target.route===win.location.hash&&mobile())win.scrollTo({left:target.x,top:target.y,behavior:'auto'});
+    if(session.origin||target.route!==win.location.hash||!mobile())return;
+    if(Math.abs(win.scrollX-target.x)<1&&Math.abs(win.scrollY-target.y)<1)return;
+    const reducedMotion=win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    win.scrollTo({left:target.x,top:target.y,behavior:reducedMotion?'auto':'smooth'});
    },250);
   }
   const field=doc.activeElement;
