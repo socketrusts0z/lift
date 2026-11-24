@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {initialData,startWorkout,newSet,validSet,validateData,mergeData,toCSV,toKg,displayWeight,workoutStats,clone,LIBRARY,newExercise,usesAddedWeight} from '../model.mjs';
+import {initialData,startWorkout,newSet,validSet,validateData,mergeData,toCSV,toKg,displayWeight,workoutStats,clone,LIBRARY,newExercise,usesAddedWeight,THEMES} from '../model.mjs';
 function completed(){const d=initialData();const w=startWorkout(d.routines[0]);w.exercises=w.exercises.slice(0,1);w.exercises[0].sets=[newSet({weight:60,reps:8,done:true}),newSet({weight:20,reps:10,done:true,type:'warmup'})];w.endedAt=new Date(Date.parse(w.startedAt)+60*60000).toISOString();d.workouts=[w];return d;}
 test('backup round trip preserves routines, history, custom exercises and unfinished workout',()=>{const d=completed();d.customExercises.push({id:'custom-1',name:'Custom press',mode:'weight',muscle:'Chest'});d.active=startWorkout(d.routines[1]);d.active.restEnd=Date.now()+90000;assert.deepEqual(validateData(JSON.parse(JSON.stringify(d))),d);});
 test('starting from a routine does not mutate it and recalls previous working sets',()=>{const d=completed(),before=clone(d.routines[0]);const w=startWorkout(d.routines[0],d.workouts);assert.equal(w.exercises[0].sets[0].weight,60);assert.equal(w.exercises[0].sets[0].done,false);assert.deepEqual(d.routines[0],before);assert.notEqual(w.exercises[0].id,d.routines[0].exercises[0].id);});
@@ -92,4 +92,14 @@ test('an explicit pull-up routine load, including zero, takes priority over prev
  pullup.sets[1].weight=0;
  const exercise=startWorkout({exercises:[pullup]},data.workouts).exercises[0];
  assert.deepEqual(exercise.sets.map(set=>set.weight),[5,0,10]);
+});
+
+test('each appearance preference survives a backup round trip',()=>{
+ const data=initialData();
+ for(const theme of Object.keys(THEMES)){
+  data.settings.theme=theme;
+  assert.equal(validateData(JSON.parse(JSON.stringify(data))).settings.theme,theme);
+ }
+ data.settings.theme='unknown-theme';
+ assert.equal(validateData(data).settings.theme,'system');
 });

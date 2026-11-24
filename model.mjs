@@ -1,5 +1,14 @@
 export const uid = () => globalThis.crypto.randomUUID();
 export const MODES = {weight:'Weight & reps',bodyweight:'Bodyweight reps',duration:'Duration',distance:'Distance & time'};
+export const THEMES=Object.freeze({
+  system:'System',
+  light:'Light',
+  dark:'Dark',
+  ocean:'Ocean',
+  lavender:'Lavender',
+  ember:'Ember',
+  midnight:'Midnight'
+});
 export const clone = value => structuredClone(value);
 export const toKg = (v, unit) => v === '' || v == null ? null : Number(v) / (unit === 'lb' ? 2.2046226218 : 1);
 export const displayWeight = (v, unit) => v == null ? '' : Number((v * (unit === 'lb' ? 2.2046226218 : 1)).toFixed(2));
@@ -71,7 +80,7 @@ export function validateData(raw) {
 assert(raw&&raw.schema===1,'Unsupported backup. Choose a Lift JSON backup (version 1).');
 assert(Array.isArray(raw.workouts)&&raw.workouts.length<=20000,'Invalid workout history.');assert(Array.isArray(raw.routines)&&raw.routines.length<=1000,'Invalid routines.');assert(Array.isArray(raw.customExercises)&&raw.customExercises.length<=5000,'Invalid custom exercises.');
 const cleanWorkout=(w,active=false)=>{assert(w&&typeof w==='object','Invalid workout.');const startedAt=date(w.startedAt),endedAt=active?null:date(w.endedAt);assert(!endedAt||Date.parse(endedAt)>=Date.parse(startedAt),'Workout ends before it starts.');return {id:text(w.id),name:text(w.name),notes:text(w.notes||'',10000),startedAt,endedAt,restEnd:active?numeric(w.restEnd,1e15):null,exercises:exercises(w.exercises)};};
-const result={schema:1,settings:{unit:raw.settings?.unit==='lb'?'lb':'kg',theme:['light','dark','system'].includes(raw.settings?.theme)?raw.settings.theme:'system',rest:numeric(raw.settings?.rest??90,3600)??90},customExercises:raw.customExercises.map(e=>{assert(e&&MODES[e.mode],'Invalid custom exercise.');return {id:text(e.id),name:text(e.name),muscle:text(e.muscle||'Custom'),mode:e.mode};}),routines:raw.routines.map(r=>({id:text(r.id),name:text(r.name),notes:text(r.notes||'',10000),exercises:exercises(r.exercises)})),workouts:raw.workouts.map(w=>cleanWorkout(w)),active:raw.active?cleanWorkout(raw.active,true):null};
+const result={schema:1,settings:{unit:raw.settings?.unit==='lb'?'lb':'kg',theme:Object.hasOwn(THEMES,raw.settings?.theme)?raw.settings.theme:'system',rest:numeric(raw.settings?.rest??90,3600)??90},customExercises:raw.customExercises.map(e=>{assert(e&&MODES[e.mode],'Invalid custom exercise.');return {id:text(e.id),name:text(e.name),muscle:text(e.muscle||'Custom'),mode:e.mode};}),routines:raw.routines.map(r=>({id:text(r.id),name:text(r.name),notes:text(r.notes||'',10000),exercises:exercises(r.exercises)})),workouts:raw.workouts.map(w=>cleanWorkout(w)),active:raw.active?cleanWorkout(raw.active,true):null};
 unique(result.workouts);unique(result.routines);unique(result.customExercises);assert(!result.active||!result.workouts.some(w=>w.id===result.active.id),'Active workout already exists in history.');return result;
 }
 export function mergeData(local,incoming){const add=(a,b)=>[...a,...b.filter(x=>!a.some(y=>y.id===x.id))];return validateData({...local,workouts:add(local.workouts,incoming.workouts),routines:add(local.routines,incoming.routines),customExercises:add(local.customExercises,incoming.customExercises),active:local.active||(!local.workouts.some(w=>w.id===incoming.active?.id)?incoming.active:null)});}
