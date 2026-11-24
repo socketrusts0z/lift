@@ -92,6 +92,33 @@ dialog::backdrop { background: #0b1e1680; }
   background: var(--tint);
   line-height: 1;
 }
+#modal-close:focus { outline: none; }
+#modal-close:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: -3px;
+}
+
+@media (max-width: 760px) {
+  /* Give Train a scroll area that ends where the bottom navigation starts. */
+  body[data-view="train"] {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  body[data-view="train"] > .app-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  body[data-view="train"] > .mobile-nav {
+    position: static;
+    flex: none;
+  }
+  body[data-view="train"] .page-footer { padding-bottom: 24px; }
+}
 
 /* Feedback stays on the control or message that changed. */
 .check-mark{display:inline-block}
