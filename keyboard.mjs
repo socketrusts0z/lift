@@ -13,53 +13,115 @@ export class KeyboardScrollSession {
   cancel(){this.origin=null;this.opened=false;this.intentional=false;}
 }
 export function installKeyboardHandling(win,doc){
- const session=new KeyboardScrollSession(),viewport=win.visualViewport;
- let baseline=viewport?.height||win.innerHeight,ensureTimer,restoreTimer,pointer=null;
- const editable=el=>el?.matches?.('input:not([type=file]):not([type=checkbox]):not([type=radio]),textarea');
- const mobile=()=>win.matchMedia('(max-width:760px)').matches;
- const position=()=>({x:win.scrollX,y:win.scrollY,route:win.location.hash});
- function capture(el){
-  if(!mobile()||!editable(el))return;
-  clearTimeout(restoreTimer);
-  session.begin(position());
- }
- function update(){
-  const height=viewport?.height||win.innerHeight,scale=viewport?.scale||1;
-  if(scale!==1){session.cancel();doc.documentElement.dataset.keyboard='closed';return;}
-  if(!session.origin)baseline=Math.max(baseline,height);
-  const shrunken=Math.max(baseline,win.innerHeight)-height>120;
-  const target=session.resize(shrunken,win.location.hash);
-  doc.documentElement.dataset.keyboard=shrunken&&!!session.origin?'open':'closed';
-  clearTimeout(ensureTimer);
-  if(target){
-   // Wait for Safari's closing animation and its own final focus scroll.
-   clearTimeout(restoreTimer);
-   restoreTimer=setTimeout(()=>{
-    if(session.origin||target.route!==win.location.hash||!mobile())return;
-    if(Math.abs(win.scrollX-target.x)<1&&Math.abs(win.scrollY-target.y)<1)return;
-    const reducedMotion=win.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    win.scrollTo({left:target.x,top:target.y,behavior:reducedMotion?'auto':'smooth'});
-   },250);
+  const session=new KeyboardScrollSession();
+  const viewport=win.visualViewport;
+  const editable=el=>el?.matches?.('input:not([type=file]):not([type=checkbox]):not([type=radio]),textarea');
+  const mobile=()=>win.matchMedia('(max-width:760px)').matches;
+  const height=()=>viewport?.height||win.innerHeight;
+  const position=()=>({x:win.scrollX,y:win.scrollY,route:win.location.hash});
+  let baseline=height(),pendingReturn=null,settleTimer,animationFrame,pointer=null;
+
+  function cancelReturn(){
+    pendingReturn=null;
+    win.clearTimeout(settleTimer);
+    win.cancelAnimationFrame(animationFrame);
   }
-  const field=doc.activeElement;
-  if(!shrunken||!mobile()||!editable(field)||!session.origin)return;
-  ensureTimer=setTimeout(()=>{
-   if(doc.activeElement!==field)return;
-   const bounds=field.getBoundingClientRect(),top=(viewport?.offsetTop||0)+16,bottom=(viewport?.offsetTop||0)+(viewport?.height||win.innerHeight)-16;
-   const delta=bounds.bottom>bottom?bounds.bottom-bottom:bounds.top<top?bounds.top-top:0;
-   if(Math.abs(delta)>1)win.scrollBy({top:delta,behavior:'auto'});
-  },150);
- }
- // pointerdown precedes focus and Safari's automatic viewport movement.
- doc.addEventListener('pointerdown',e=>{clearTimeout(restoreTimer);pointer={x:e.clientX,y:e.clientY};capture(e.target);},{capture:true,passive:true});
- doc.addEventListener('pointermove',e=>{if(pointer&&Math.hypot(e.clientX-pointer.x,e.clientY-pointer.y)>10){session.movedByUser();clearTimeout(restoreTimer);}},{passive:true});
- doc.addEventListener('pointerup',()=>pointer=null,{passive:true});
- doc.addEventListener('pointercancel',()=>pointer=null,{passive:true});
- doc.addEventListener('wheel',()=>{session.movedByUser();clearTimeout(restoreTimer);},{passive:true});
- doc.addEventListener('focusin',e=>{capture(e.target);update();});
- doc.addEventListener('focusout',()=>setTimeout(()=>{update();if(!session.opened&&!editable(doc.activeElement))session.cancel();},0));
- viewport?.addEventListener('resize',update);
- win.addEventListener('resize',update);
- win.addEventListener('hashchange',()=>{session.cancel();clearTimeout(restoreTimer);clearTimeout(ensureTimer);doc.documentElement.dataset.keyboard='closed';});
- win.addEventListener('orientationchange',()=>{session.cancel();clearTimeout(restoreTimer);baseline=0;setTimeout(update,250);});
+
+  function restore(target){
+    if(session.origin||target.route!==win.location.hash||!mobile())return;
+    const from=position();
+    if(Math.abs(from.x-target.x)<1&&Math.abs(from.y-target.y)<1)return;
+    if(win.matchMedia('(prefers-reduced-motion: reduce)').matches){
+      win.scrollTo(target.x,target.y);
+      return;
+    }
+
+    // A timed sequence avoids WebKit shortening the native smooth scroll during a keyboard transition.
+    let startedAt;
+    function step(now){
+      startedAt??=now;
+      const progress=Math.min(1,(now-startedAt)/320);
+      const ease=progress*progress*(3-2*progress);
+      win.scrollTo(from.x+(target.x-from.x)*ease,from.y+(target.y-from.y)*ease);
+      if(progress<1)animationFrame=win.requestAnimationFrame(step);
+    }
+    animationFrame=win.requestAnimationFrame(step);
+  }
+
+  function waitForViewport(){
+    win.clearTimeout(settleTimer);
+    if(!pendingReturn)return;
+    if(baseline-height()>100)return;
+    settleTimer=win.setTimeout(()=>{
+      const target=pendingReturn;
+      pendingReturn=null;
+      if(target)restore(target);
+    },120);
+  }
+
+  function capture(el){
+    if(!mobile()||!editable(el)||session.origin)return;
+    cancelReturn();
+    baseline=Math.max(height(),win.innerHeight);
+    session.begin(position());
+  }
+
+  function update(){
+    if((viewport?.scale||1)!==1){
+      session.cancel();
+      cancelReturn();
+      doc.documentElement.dataset.keyboard='closed';
+      return;
+    }
+    const shrunken=baseline-height()>100;
+    const target=session.resize(shrunken,win.location.hash);
+    doc.documentElement.dataset.keyboard=shrunken&&!!session.origin?'open':'closed';
+    if(target)pendingReturn=target;
+    if(pendingReturn)waitForViewport();
+    // Safari already pans to the focused field. An extra scroll here competes with that pan.
+  }
+
+  function preserveScroll(){
+    session.movedByUser();
+    cancelReturn();
+  }
+
+  function actionKeepsPosition(target){
+    return target?.closest?.('[data-preserve-scroll]');
+  }
+
+  doc.addEventListener('pointerdown',e=>{
+    cancelReturn();
+    pointer={x:e.clientX,y:e.clientY};
+    if(actionKeepsPosition(e.target))preserveScroll();
+    capture(e.target);
+  },{capture:true,passive:true});
+  doc.addEventListener('pointermove',e=>{
+    if(pointer&&Math.hypot(e.clientX-pointer.x,e.clientY-pointer.y)>10)preserveScroll();
+  },{passive:true});
+  doc.addEventListener('pointerup',()=>pointer=null,{passive:true});
+  doc.addEventListener('pointercancel',()=>pointer=null,{passive:true});
+  doc.addEventListener('touchmove',preserveScroll,{passive:true});
+  doc.addEventListener('wheel',preserveScroll,{passive:true});
+  doc.addEventListener('click',e=>{
+    if(actionKeepsPosition(e.target))preserveScroll();
+  },{capture:true});
+  doc.addEventListener('focusin',e=>{capture(e.target);update();});
+  doc.addEventListener('focusout',()=>win.setTimeout(()=>{
+    update();
+    if(!session.opened&&!editable(doc.activeElement))session.cancel();
+  },0));
+
+  viewport?.addEventListener('resize',update);
+  viewport?.addEventListener('scroll',waitForViewport,{passive:true});
+  win.addEventListener('resize',update);
+  win.addEventListener('scroll',waitForViewport,{passive:true});
+  function reset(){
+    session.cancel();
+    cancelReturn();
+    baseline=height();
+    doc.documentElement.dataset.keyboard='closed';
+  }
+  win.addEventListener('hashchange',reset);
+  win.addEventListener('orientationchange',reset);
 }
