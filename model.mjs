@@ -25,8 +25,31 @@ export function initialData() {
 const routine=(name,ids)=>({id:uid(),name,notes:'',exercises:ids.map(id=>newExercise(LIBRARY.find(x=>x.id===id)))});
 return {schema:1,settings:{unit:'kg',theme:'system',rest:90},customExercises:[],routines:[routine('Upper body A',['bench','row','db-press','lat','curl']),routine('Lower body A',['squat','rdl','legcurl','calf'])],workouts:[],active:null};
 }
-export function startWorkout(routine,history=[]) {
-const w={id:uid(),name:routine?.name||'Freestyle workout',notes:routine?.notes||'',startedAt:new Date().toISOString(),endedAt:null,restEnd:null,exercises:clone(routine?.exercises||[])};
+export function routineForWorkout(routines,workout){
+  if(Object.hasOwn(workout,'routineId'))return routines.find(routine=>routine.id===workout.routineId);
+  // Older sessions saved only a name. Use it when it identifies a single routine.
+  const name=workout.name.trim().toLowerCase();
+  const matches=routines.filter(routine=>routine.name.trim().toLowerCase()===name);
+  return matches.length===1?matches[0]:undefined;
+}
+
+export function nextRoutine(routines,workouts){
+  if(routines.length===0)return undefined;
+  let lastIndex=-1;
+  let lastCompletedAt=-Infinity;
+  for(const workout of workouts){
+    const completedAt=Date.parse(workout.endedAt);
+    if(!Number.isFinite(completedAt)||completedAt<lastCompletedAt)continue;
+    const routine=routineForWorkout(routines,workout);
+    if(!routine)continue;
+    lastIndex=routines.indexOf(routine);
+    lastCompletedAt=completedAt;
+  }
+  return routines[(lastIndex+1)%routines.length];
+}
+
+export function startWorkout(template,history=[],routineId=template?.id??null) {
+const w={id:uid(),routineId,name:template?.name||'Freestyle workout',notes:template?.notes||'',startedAt:new Date().toISOString(),endedAt:null,restEnd:null,exercises:clone(template?.exercises||[])};
 for(const exercise of w.exercises){
   exercise.id=uid();
   const last=[...history].sort((a,b)=>Date.parse(b.startedAt)-Date.parse(a.startedAt))
@@ -79,7 +102,20 @@ function unique(items){assert(new Set(items.map(x=>x.id)).size===items.length,'D
 export function validateData(raw) {
 assert(raw&&raw.schema===1,'Unsupported backup. Choose a Lift JSON backup (version 1).');
 assert(Array.isArray(raw.workouts)&&raw.workouts.length<=20000,'Invalid workout history.');assert(Array.isArray(raw.routines)&&raw.routines.length<=1000,'Invalid routines.');assert(Array.isArray(raw.customExercises)&&raw.customExercises.length<=5000,'Invalid custom exercises.');
-const cleanWorkout=(w,active=false)=>{assert(w&&typeof w==='object','Invalid workout.');const startedAt=date(w.startedAt),endedAt=active?null:date(w.endedAt);assert(!endedAt||Date.parse(endedAt)>=Date.parse(startedAt),'Workout ends before it starts.');return {id:text(w.id),name:text(w.name),notes:text(w.notes||'',10000),startedAt,endedAt,restEnd:active?numeric(w.restEnd,1e15):null,exercises:exercises(w.exercises)};};
+const cleanWorkout=(workout,active=false)=>{
+  assert(workout&&typeof workout==='object','Invalid workout.');
+  const startedAt=date(workout.startedAt),endedAt=active?null:date(workout.endedAt);
+  assert(!endedAt||Date.parse(endedAt)>=Date.parse(startedAt),'Workout ends before it starts.');
+  const result={
+    id:text(workout.id),name:text(workout.name),notes:text(workout.notes||'',10000),
+    startedAt,endedAt,restEnd:active?numeric(workout.restEnd,1e15):null,
+    exercises:exercises(workout.exercises)
+  };
+  if(Object.hasOwn(workout,'routineId')){
+    result.routineId=workout.routineId===null?null:text(workout.routineId);
+  }
+  return result;
+};
 const result={schema:1,settings:{unit:raw.settings?.unit==='lb'?'lb':'kg',theme:Object.hasOwn(THEMES,raw.settings?.theme)?raw.settings.theme:'system',rest:numeric(raw.settings?.rest??90,3600)??90},customExercises:raw.customExercises.map(e=>{assert(e&&MODES[e.mode],'Invalid custom exercise.');return {id:text(e.id),name:text(e.name),muscle:text(e.muscle||'Custom'),mode:e.mode};}),routines:raw.routines.map(r=>({id:text(r.id),name:text(r.name),notes:text(r.notes||'',10000),exercises:exercises(r.exercises)})),workouts:raw.workouts.map(w=>cleanWorkout(w)),active:raw.active?cleanWorkout(raw.active,true):null};
 unique(result.workouts);unique(result.routines);unique(result.customExercises);assert(!result.active||!result.workouts.some(w=>w.id===result.active.id),'Active workout already exists in history.');return result;
 }
