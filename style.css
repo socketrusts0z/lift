@@ -118,6 +118,14 @@ dialog {
   box-shadow: 0 18px 56px #0e261b35;
 }
 dialog::backdrop { background: #0b1e1680; }
+
+/* Keep editable text large enough to avoid iOS zooming on focus. */
+@media (max-width: 760px), (pointer: coarse) {
+  dialog :is(input, select, textarea) {
+    font-size: 1rem;
+    font-size: max(16px, 1rem);
+  }
+}
 .dialog-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px;
