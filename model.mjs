@@ -7,7 +7,12 @@ export const THEMES=Object.freeze({
   ocean:'Ocean',
   lavender:'Lavender',
   ember:'Ember',
-  midnight:'Midnight'
+  midnight:'Midnight',
+  rose:'Rose',
+  solar:'Solar',
+  'deep-sea':'Deep Sea',
+  plum:'Plum',
+  graphite:'Graphite'
 });
 export const clone = value => structuredClone(value);
 export const toKg = (v, unit) => v === '' || v == null ? null : Number(v) / (unit === 'lb' ? 2.2046226218 : 1);
